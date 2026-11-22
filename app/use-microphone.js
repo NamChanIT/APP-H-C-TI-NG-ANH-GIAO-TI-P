@@ -3,17 +3,35 @@
 import { useEffect, useRef, useState } from 'react';
 import { createVoiceDetector, encodeWav } from '../lib/audio.mjs';
 
-export function useMicrophone({ phase, speaking, onTranscript, onError }) {
+export function useMicrophone({ phase, speaking, onTranscript, onError, pauseMs }) {
   const [mic, setMic] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [hearing, setHearing] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const [level, setLevel] = useState(0);
+  const [devices, setDevices] = useState([]);
+  const [deviceId, setDeviceId] = useState('');
   const wanted = useRef(false);
   const capture = useRef(null);
   const upload = useRef(null);
   const callbacks = useRef({});
   callbacks.current = { phase, speaking, onTranscript, onError };
+
+  async function refreshDevices() {
+    try {
+      const list = await navigator.mediaDevices?.enumerateDevices();
+      setDevices((list || []).filter(device => device.kind === 'audioinput' && device.deviceId !== 'default'));
+    } catch {
+      setDevices([]);
+    }
+  }
+
+  useEffect(() => {
+    const media = navigator.mediaDevices;
+    refreshDevices();
+    media?.addEventListener('devicechange', refreshDevices);
+    return () => media?.removeEventListener('devicechange', refreshDevices);
+  }, []);
 
   function release(current) {
     if (current.node) {
@@ -38,7 +56,7 @@ export function useMicrophone({ phase, speaking, onTranscript, onError }) {
     const current = capture.current;
     if (!current?.track) return;
     const { phase: stage, speaking: isSpeaking } = callbacks.current;
-    current.track.enabled = wanted.current && stage === 'live' && !isSpeaking && !upload.current;
+    current.track.enabled = wanted.current && ['live', 'mic-test'].includes(stage) && !isSpeaking && !upload.current;
     if (!current.track.enabled) current.detector?.reset();
   }
 
@@ -54,7 +72,7 @@ export function useMicrophone({ phase, speaking, onTranscript, onError }) {
   }
 
   useEffect(() => {
-    if (phase === 'live' && !speaking) syncCapture();
+    if (['live', 'mic-test'].includes(phase) && !speaking) syncCapture();
     else suspendRecognition();
   }, [phase, speaking]);
 
@@ -122,7 +140,10 @@ export function useMicrophone({ phase, speaking, onTranscript, onError }) {
       const resume = context.resume();
       resume.catch(() => {});
       const media = await navigator.mediaDevices.getUserMedia({
-        audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        audio: {
+          channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true,
+          ...(deviceId && { deviceId: { exact: deviceId } })
+        },
         video: false
       });
       current.stream = media;
@@ -130,12 +151,14 @@ export function useMicrophone({ phase, speaking, onTranscript, onError }) {
         release(current);
         return;
       }
+      refreshDevices();
       current.track = media.getAudioTracks()[0];
       current.track.enabled = false;
       await resume;
       await context.audioWorklet.addModule('/mic-worklet.js');
       if (capture.current !== current) return;
       current.detector = createVoiceDetector(context.sampleRate, {
+        pauseMs,
         onLevel: setLevel,
         onSpeech: setHearing,
         onTurn: (chunks, quietMs) => recognize(current, chunks, quietMs)
@@ -143,7 +166,14 @@ export function useMicrophone({ phase, speaking, onTranscript, onError }) {
       current.source = context.createMediaStreamSource(media);
       current.node = new AudioWorkletNode(context, 'speakmate-mic', { numberOfOutputs: 0 });
       current.node.port.onmessage = ({ data }) => {
-        if (capture.current === current && current.track.enabled) current.detector.push(data);
+        if (capture.current !== current || !current.track.enabled) return;
+        if (callbacks.current.phase === 'mic-test') {
+          let squares = 0;
+          for (const value of data) squares += value * value;
+          setLevel(Math.min(1, Math.sqrt(squares / data.length) * 16));
+        } else {
+          current.detector.push(data);
+        }
       };
       current.source.connect(current.node);
       current.track.addEventListener('ended', () => {
@@ -166,6 +196,11 @@ export function useMicrophone({ phase, speaking, onTranscript, onError }) {
     }
   }
 
-  return { mic, connecting, hearing, transcribing, level, toggleMic, mute, suspendRecognition,
+  function selectDevice(value) {
+    mute();
+    setDeviceId(value);
+  }
+
+  return { mic, devices, deviceId, selectDevice, connecting, hearing, transcribing, level, toggleMic, mute, suspendRecognition,
     finishSpeaking: () => capture.current?.detector?.finish() };
 }

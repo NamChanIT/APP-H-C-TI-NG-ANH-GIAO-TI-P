@@ -38,11 +38,33 @@ Nếu Ollama gián đoạn, bật lại dịch vụ hoặc cài đúng model r�
 2. Nhập `GROQ_API_KEY` cùng `SPEAKMATE_SIGNUP_CODE` trong Dashboard. Tạo key tại [Groq Console](https://console.groq.com/keys) và chọn một mã mời riêng cho nhóm thử. Giữ cả hai giá trị trong Render. Để dùng Groq miễn phí, giữ tài khoản Groq ở gói Free và trong hạn mức của gói. [Hạn mức Groq](https://console.groq.com/docs/rate-limits)
 3. Xác nhận Render hiển thị **Free** rồi chọn **Deploy Blueprint** và mở URL HTTPS Render cấp. Kiểm tra `/api/health`, đăng ký bằng mã mời rồi thử một lượt nói.
 
-Blueprint tạo một Node web service **Free** ở Singapore. SQLite nằm trong vùng tạm. Tài khoản, transcript và thẻ ôn trên Render bị xóa khi dịch vụ redeploy, khởi động lại hoặc ngủ. Render Free ngủ sau 15 phút không có truy cập. Lần mở lại đầu tiên có thể mất khoảng một phút. Dữ liệu trên MacBook nằm trong database local riêng. [Giới hạn Render Free](https://render.com/docs/free)
+Blueprint tạo một Node web service **Free** ở Singapore. SQLite nằm trong vùng tạm. Khi chưa bật lưu trữ ngoài, tài khoản, transcript và thẻ ôn trên Render bị xóa khi dịch vụ redeploy, khởi động lại hoặc ngủ. Render Free ngủ sau 15 phút không có truy cập. Lần mở lại đầu tiên có thể mất khoảng một phút. Dữ liệu trên MacBook nằm trong database local riêng. [Giới hạn Render Free](https://render.com/docs/free)
 
 Khi có `GROQ_API_KEY`, Render dùng Groq cho hội thoại, báo cáo và nhận diện giọng nói. Groq nhận âm thanh của lượt nói và văn bản hội thoại để xử lý, còn camera chỉ chạy trong trình duyệt. Có thể cấu hình `GROQ_CHAT_MODEL` và `GROQ_SPEECH_MODEL` trong Dashboard. Bản local mặc định dùng Ollama và Whisper trên máy.
 
 Render đặt `RENDER_EXTERNAL_URL` tự động. Nếu dùng domain riêng, đặt `SPEAKMATE_PUBLIC_ORIGIN` thành origin HTTPS của domain đó để cookie và kiểm tra origin áp dụng cho đúng địa chỉ.
+
+### Giữ dữ liệu trên Render Free bằng R2
+
+Để bật sao lưu, tạo một bucket Cloudflare R2 riêng tư và cấp một API token Object Read & Write giới hạn trong bucket đó. Thêm các biến dưới đây trong **Render → Environment** rồi deploy lại. Render vẫn dùng web service Free. R2 có hạn mức riêng, hãy kiểm tra mức sử dụng của tài khoản. [Giá R2](https://developers.cloudflare.com/r2/pricing/)
+
+| Biến | Giá trị |
+| --- | --- |
+| `SPEAKMATE_R2_BUCKET` | Tên bucket đã tạo |
+| `SPEAKMATE_R2_ENDPOINT` | Origin S3 API của tài khoản R2, dạng `https://<account-id>.r2.cloudflarestorage.com` |
+| `SPEAKMATE_R2_ACCESS_KEY_ID` | Access Key ID của token |
+| `SPEAKMATE_R2_SECRET_ACCESS_KEY` | Secret Access Key của token |
+| `SPEAKMATE_BACKUP_KEY` | Khóa mã hóa 64 ký tự hex, tạo riêng bằng `openssl rand -hex 32` |
+| `SPEAKMATE_R2_OBJECT` | Tên object tùy chọn, mặc định `speakmate.sqlite.enc` |
+
+Bản demo tạo snapshot SQLite mã hóa AES-256-GCM sau khi sửa dữ liệu và phục hồi snapshot lúc khởi động. Dùng một instance và một object riêng cho mỗi dịch vụ. Giữ bản lưu khóa mã hóa riêng để còn giải mã dữ liệu. Tính năng có giới hạn snapshot 24 MB, phù hợp nhóm thử nhỏ. Bản xuất JSON trong **History** chỉ chứa phiên và thẻ của tài khoản hiện tại. Bản xuất dùng để giữ lại dữ liệu đọc được.
+
+### Luyện nói và sửa câu
+
+- Chọn **Microphone** rồi bấm **Check mic** trước cuộc gọi. Tín hiệu kiểm tra chỉ chạy trong trình duyệt. Chọn khoảng chờ 0,8 giây, 1,5 giây hoặc 2,4 giây trước khi mở mic.
+- Bật **Review voice transcript before sending** để sửa hoặc bỏ bản nhận diện trước khi gửi AI. Nếu muốn hội thoại nhanh, có thể để tắt.
+- Trong báo cáo, **Try it again** ưu tiên câu sửa đầu tiên. Nghe mẫu rồi bấm **Say it aloud**. Kết quả chỉ đối chiếu từ được nhận dạng. Trong Free Talk, AI có thể đưa một thẻ đến hạn vào cuộc gọi mới nếu phù hợp.
+- Free Talk dùng 14 tin gần nhất cùng các chi tiết được trích từ phần trước của phiên dài. Việc rút gọn không gọi thêm model.
 
 ## Đăng ký và đăng nhập
 

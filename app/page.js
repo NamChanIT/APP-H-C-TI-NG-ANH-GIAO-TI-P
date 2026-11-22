@@ -7,6 +7,7 @@ import { lessonFor } from '../lib/curriculum.mjs';
 import { correctionCard, vocabularyCard } from '../lib/review-cards.mjs';
 import Review, { PracticeActions, reviewApi } from './review';
 import Account from './account';
+import RepeatPractice from './practice';
 import Avatar from './avatar';
 import { Icon } from './icons';
 import { useMedia } from './use-media';
@@ -38,7 +39,7 @@ function Transcript({ messages, character }) {
   )}</ol> : <p className="muted empty">Your conversation will appear here.</p>;
 }
 
-function Report({ data, character, retry, busy, back, onSpeak, saveCard, isSaved }) {
+function Report({ data, character, retry, busy, back, onSpeak, saveCard, isSaved, speaking }) {
   const report = data.report;
   return <section className="report panel">
     <div className="section-title"><div><h2>Session summary</h2>
@@ -54,6 +55,8 @@ function Report({ data, character, retry, busy, back, onSpeak, saveCard, isSaved
           : <p className="muted">{['fluency', 'pronunciation'].includes(key) ? 'Requires acoustic assessment' : 'Insufficient transcript evidence'}</p>}</article>;
     })}</div>}
     {report && <>
+      {!!report.corrections.length && <RepeatPractice key={data.session.id} correction={report.corrections[0]} onSpeak={onSpeak} speaking={speaking}
+        onSave={() => saveCard('correction', 0)} saved={isSaved('correction', correctionCard(report.corrections[0]))} />}
       {!!report.strengths.length && <><h3>What went well</h3><ul>{report.strengths.map((value, index) => <li key={index}><q>{value}</q></li>)}</ul></>}
       {!!report.corrections.length && <><h3>Say it more naturally</h3><ul>{report.corrections.map((item, index) =>
         <li key={index}><q>{item.original}</q><p><strong>{item.corrected}</strong></p><p>{item.explanation}</p>
@@ -93,6 +96,9 @@ function Studio({ user, logout, signingOut, cloudSpeech }) {
   const [phase, setPhase] = useState('ready');
   const [notice, setNotice] = useState('');
   const [draft, setDraft] = useState('');
+  const [reviewTranscript, setReviewTranscript] = useState(false);
+  const [voiceDraft, setVoiceDraft] = useState(null);
+  const [pauseMs, setPauseMs] = useState(820);
   const [seconds, setSeconds] = useState(0);
   const [captions, setCaptions] = useState(true);
   const [tab, setTab] = useState('setup');
@@ -114,12 +120,21 @@ function Studio({ user, logout, signingOut, cloudSpeech }) {
   const lastAssistant = messages.findLast(message => message.role === 'assistant');
   const lastLearner = messages.findLast(message => message.role === 'user');
   const media = useMedia({
-    onTranscript: (text, speechEndedAt) => sendText(text, 'voice', speechEndedAt),
-    onError: setNotice, locale: character.locale, rate, phase
+    onTranscript: (text, speechEndedAt) => {
+      if (reviewTranscript) {
+        setVoiceDraft({ text, speechEndedAt });
+        setNotice('');
+      } else {
+        sendText(text, 'voice', speechEndedAt);
+      }
+    },
+    onError: setNotice, locale: character.locale, rate, pauseMs,
+    phase: view === 'studio' && phase === 'ready' ? 'mic-test' : voiceDraft && phase === 'live' ? 'confirmation' : phase
   });
   const status = media.speaking ? 'Speaking' : media.transcribing ? 'Transcribing' :
     media.connecting ? 'Connecting microphone' : phase === 'thinking' || phase === 'starting' ? 'Thinking'
     : phase === 'paused' ? 'Paused' : phase === 'ending' ? 'Ending call'
+    : voiceDraft && phase === 'live' ? 'Check transcript'
     : phase === 'live' ? (media.mic ? 'Listening' : 'In session') : 'Ready to talk';
 
   useEffect(() => {
@@ -252,6 +267,7 @@ function Studio({ user, logout, signingOut, cloudSpeech }) {
     elapsed.current = 0;
     setRetry(null);
     setDraft('');
+    setVoiceDraft(null);
     try {
       const next = await api('', { character: selected, topic, mode });
       setData(next);
@@ -318,6 +334,7 @@ function Studio({ user, logout, signingOut, cloudSpeech }) {
     if (!data || busy.current) return;
     busy.current = true;
     stopClock();
+    setVoiceDraft(null);
     media.mute();
     media.silence();
     media.stopCamera();
@@ -377,6 +394,7 @@ function Studio({ user, logout, signingOut, cloudSpeech }) {
   }
 
   function openReview() {
+    media.mute();
     media.stopCamera();
     media.silence();
     setNotice('');
@@ -385,6 +403,7 @@ function Studio({ user, logout, signingOut, cloudSpeech }) {
   }
 
   function openStudio() {
+    media.mute();
     media.silence();
     setPhase('ready');
     setData(null);
@@ -417,12 +436,12 @@ function Studio({ user, logout, signingOut, cloudSpeech }) {
       <div className="brand"><span className="brand-mark"><Icon name="wave" size={24} /></span><div>SpeakMate<span className="brand-ai"> AI</span><small>ENGLISH STUDIO</small></div></div>
       <nav aria-label="Workspace">
         <button className={view === 'studio' ? 'nav-current' : ''} disabled={view !== 'studio' && waiting} onClick={() => view !== 'studio' && openStudio()}><Icon name="studio" />Studio</button>
-        <button className={view === 'history' ? 'nav-current' : ''} disabled={active} onClick={() => { media.stopCamera(); media.silence(); setView('history'); setNotice(''); }}><Icon name="history" />History</button>
+        <button className={view === 'history' ? 'nav-current' : ''} disabled={active} onClick={() => { media.mute(); media.stopCamera(); media.silence(); setView('history'); setNotice(''); }}><Icon name="history" />History</button>
         <button className={view === 'review' ? 'nav-current' : ''} disabled={active} onClick={openReview}><Icon name="book" />Review</button>
       </nav>
       <div className="rail-bottom account-menu">
         <span title={user.email}>{user.email}</span>
-        <button type="button" disabled={active || signingOut} onClick={() => logout().catch(error => setNotice(error.message))}>Sign out</button>
+        <button type="button" disabled={active || signingOut} onClick={() => { media.mute(); logout().catch(error => setNotice(error.message)); }}>Sign out</button>
       </div>
     </aside>
     <main>
@@ -433,7 +452,7 @@ function Studio({ user, logout, signingOut, cloudSpeech }) {
       </header>
       {notice && <div className="notice" role="status">{notice}
         {retry && view === 'studio' && <button disabled={phase !== 'live'} onClick={() => submitTurn(retry)}>Retry turn</button>}</div>}
-      {view === 'report' && data && <Report data={data} character={characters.find(item => item.id === data.session.character_id)} retry={() => assess(data.session.id)} busy={assessing.has(data.session.id)} back={openStudio}
+      {view === 'report' && data && <Report data={data} character={characters.find(item => item.id === data.session.character_id)} retry={() => assess(data.session.id)} busy={assessing.has(data.session.id)} back={openStudio} speaking={media.speaking}
         onSpeak={text => media.speak(text, { accent: characters.find(item => item.id === data.session.character_id).locale })}
         saveCard={(kind, index) => saveCard(kind, index, { sessionId: data.session.id })} isSaved={isSaved} />}
       {view === 'review' && <Review cards={cards} loading={reviewLoading} error={reviewError} onRefresh={refreshReview}
@@ -442,7 +461,8 @@ function Studio({ user, logout, signingOut, cloudSpeech }) {
         <div className="stats"><article><small>Practice time</small><strong>{Math.floor(history.reduce((sum, session) => sum + session.active_seconds, 0) / 60)} min</strong></article>
           <article><small>Completed sessions</small><strong>{history.length}</strong></article>
           <article><small>Microphone turns</small><strong>{history.reduce((sum, session) => sum + session.voice_turns, 0)}</strong></article></div>
-        <h2>Recent sessions</h2>
+        <div className="section-title"><h2>Recent sessions</h2>
+          <a className="export-link" href="/api/export" download="speakmate-export.json">Export history and review cards</a></div>
         {history.length ? <ul>{history.map(session => <li key={session.id}><button onClick={() => openSession(session)}>
           <span>{topics.find(item => item.id === session.topic_id)?.title}<small>{new Date(session.ended_at).toLocaleString()} · {modes[session.mode]}</small></span>
           <strong>{CLOCK(session.active_seconds)}</strong></button></li>)}</ul> : <p className="muted">Complete a conversation to see it here.</p>}
@@ -466,7 +486,7 @@ function Studio({ user, logout, signingOut, cloudSpeech }) {
           </div>
           <div className="controls">
             <div className="control-group">
-              <Control icon="mic" disabled={!active || waiting || phase === 'paused' || !!retry} active={media.mic} aria-pressed={media.mic || media.connecting} onClick={() => { setNotice(''); media.toggleMic(); }}>Mic</Control>
+              <Control icon="mic" disabled={waiting || phase === 'paused' || !!retry || !!voiceDraft} active={media.mic} aria-pressed={media.mic || media.connecting} onClick={() => { setNotice(''); media.toggleMic(); }}>{active ? 'Mic' : media.mic ? 'Stop mic check' : 'Check mic'}</Control>
               <Control icon="camera" disabled={phase === 'ending'} active={media.camera} aria-pressed={media.camera} onClick={media.toggleCamera}>Camera</Control>
               <Control icon="cc" active={captions} aria-pressed={captions} onClick={() => setCaptions(!captions)}>Captions</Control>
               {active && <Control icon={phase === 'paused' ? 'play' : 'pause'} disabled={waiting} onClick={pause}>{phase === 'paused' ? 'Resume' : 'Pause'}</Control>}
@@ -474,7 +494,23 @@ function Studio({ user, logout, signingOut, cloudSpeech }) {
             {active ? <button className="end" disabled={waiting} onClick={finish}><Icon name="phone" />End call</button> :
               <button className="primary start" onClick={start}><Icon name="studio" />Start conversation</button>}
           </div>
-          {active && <div className="chat-controls">
+          {voiceDraft && <form className="voice-confirmation" onSubmit={event => {
+            event.preventDefault();
+            if (!voiceDraft.text.trim() || phase !== 'live') return;
+            const { text, speechEndedAt } = voiceDraft;
+            setVoiceDraft(null);
+            sendText(text, 'voice', speechEndedAt);
+          }}>
+            <label>Check your voice transcript
+              <textarea rows={3} maxLength={1200} value={voiceDraft.text}
+                onChange={event => setVoiceDraft({ ...voiceDraft, text: event.target.value })} />
+            </label>
+            <div className="practice-actions">
+              <button className="primary" type="submit" disabled={phase !== 'live' || !voiceDraft.text.trim()}>Send transcript</button>
+              <button type="button" onClick={() => setVoiceDraft(null)}>Discard</button>
+            </div>
+          </form>}
+          {active && !voiceDraft && <div className="chat-controls">
             <form onSubmit={event => { event.preventDefault(); sendText(draft, 'typed'); }}>
               <input aria-label="Type an English reply" value={draft} maxLength={1200} onChange={event => setDraft(event.target.value)} placeholder="Type an English reply…" />
               <button disabled={phase !== 'live' || !!retry || !draft.trim()}>Send</button>
@@ -483,9 +519,10 @@ function Studio({ user, logout, signingOut, cloudSpeech }) {
               media.hearing ? <button onClick={media.finishSpeaking}>Done speaking</button> :
               <button disabled={phase !== 'live' || !lastAssistant || !!retry} onClick={() => media.speak(lastAssistant.content)}><Icon name="volume" size={16} /> Replay</button>}
           </div>}
-          {media.mic && !media.speaking && phase === 'live' && <div className="mic-input">
+          {media.mic && !media.speaking && ['ready', 'live'].includes(phase) && !voiceDraft && <div className="mic-input">
             <span>Mic input</span><meter aria-label="Microphone input level" min="0" max="1" value={media.level} />
           </div>}
+          {!active && media.mic && <p className="muted mic-hint">Speak to check the input meter. The mic check stays in your browser.</p>}
           <p className="privacy"><Icon name="lock" size={14} /> {cloudSpeech
             ? 'Camera video stays in your browser. Audio and conversation text are sent to Groq.'
             : 'Camera and speech recognition run on this device. Audio is discarded after transcription.'}</p>
@@ -513,6 +550,19 @@ function Studio({ user, logout, signingOut, cloudSpeech }) {
               </select></label>
               <label>Speed<select value={rate} onChange={event => setRate(event.target.value)}><option value="0.75">0.75×</option><option value="0.9">0.9×</option><option value="1">1×</option><option value="1.15">1.15×</option></select></label>
             </div>
+            <label>Microphone<select value={media.deviceId} disabled={active || media.connecting}
+              onChange={event => media.selectDevice(event.target.value)}>
+              <option value="">System default</option>
+              {media.devices.map((device, index) => device.deviceId && <option key={device.deviceId} value={device.deviceId}>
+                {device.label || `Microphone ${index + 1}`}</option>)}
+            </select></label>
+            <label>Time before sending speech<select value={pauseMs} disabled={active || media.mic || media.connecting}
+              onChange={event => setPauseMs(Number(event.target.value))}>
+              <option value={820}>Quick · 0.8 sec</option><option value={1500}>More time · 1.5 sec</option>
+              <option value={2400}>Take your time · 2.4 sec</option>
+            </select></label>
+            <label className="check-field"><input type="checkbox" checked={reviewTranscript} disabled={!!voiceDraft}
+              onChange={event => setReviewTranscript(event.target.checked)} />Review voice transcript before sending</label>
             <details className="lesson"><summary>Topic guide</summary><p>{lesson.goal}</p>
               <h3>Conversation prompts</h3><ol>{lesson.questions.map(question => <li key={question}>{question}</li>)}</ol>
               <h3>Vocabulary</h3><ul>{lesson.vocabulary.map((item, index) => {

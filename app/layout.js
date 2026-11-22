@@ -8,7 +8,7 @@ export const metadata = {
 export default function Layout({ children }) {
   return <html lang="en"><body>
     {process.env.NEXT_PUBLIC_SPEAKMATE_DEMO === 'true' && <aside className="render-demo-notice" aria-label="Demo storage">
-      Free demo. Accounts, conversations and review cards reset when the server sleeps, restarts or redeploys.
+      Free demo. Without an external backup, accounts, conversations and review cards reset when the server sleeps, restarts or redeploys.
     </aside>}
     {children}
   </body></html>;

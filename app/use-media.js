@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useMicrophone } from './use-microphone';
 
-export function useMedia({ onTranscript, onError, locale, rate, phase }) {
+export function useMedia({ onTranscript, onError, locale, rate, phase, pauseMs }) {
   const [camera, setCamera] = useState(false);
   const [speaking, setSpeaking] = useState(false);
   const [voices, setVoices] = useState([]);
@@ -16,7 +16,7 @@ export function useMedia({ onTranscript, onError, locale, rate, phase }) {
   const video = useRef(null);
   const callbacks = useRef({});
   callbacks.current = { onError };
-  const microphone = useMicrophone({ onTranscript, onError, phase, speaking });
+  const microphone = useMicrophone({ onTranscript, onError, phase, speaking, pauseMs });
 
   useEffect(() => {
     const synth = window.speechSynthesis;

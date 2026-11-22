@@ -34,3 +34,16 @@ test('voice detector keeps pre-roll, ignores quiet rooms and submits once after 
   assert.equal(results.length, 2);
   assert.equal(results[1].quietMs, 0);
 });
+
+test('long pause preference keeps a thinking pause inside the same turn', () => {
+  let turns = 0;
+  const detector = createVoiceDetector(16000, { pauseMs: 1500, onLevel() {}, onSpeech() {}, onTurn() { turns++; } });
+  const voice = new Float32Array(1600).fill(0.09);
+  const silence = new Float32Array(1600);
+  for (let i = 0; i < 5; i++) detector.push(voice);
+  for (let i = 0; i < 10; i++) detector.push(silence);
+  assert.equal(turns, 0);
+  detector.push(voice);
+  for (let i = 0; i < 15; i++) detector.push(silence);
+  assert.equal(turns, 1);
+});

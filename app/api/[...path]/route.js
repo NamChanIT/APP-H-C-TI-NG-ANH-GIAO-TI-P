@@ -22,7 +22,7 @@ async function handle(request, { params }) {
       ...(request.body && { body: request.body, duplex: 'half' })
     });
     const responseHeaders = new Headers({ 'Cache-Control': 'no-store' });
-    for (const key of ['content-type', 'cache-control', 'x-accel-buffering']) {
+    for (const key of ['content-type', 'cache-control', 'x-accel-buffering', 'content-disposition']) {
       const value = upstream.headers.get(key);
       if (value) responseHeaders.set(key, value);
     }
