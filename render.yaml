@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: speakmate-ai
+    runtime: node
+    plan: 0.5c-512mb
+    region: singapore
+    branch: main
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start:render
+    healthCheckPath: /api/health
+    disk:
+      name: speakmate-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_VERSION
+        value: 22.22.0
+      - key: SPEAKMATE_DB
+        value: /var/data/speakmate.sqlite
+      - key: GROQ_API_KEY
+        sync: false
+      - key: SPEAKMATE_SIGNUP_CODE
+        sync: false

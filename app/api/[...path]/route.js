@@ -1,14 +1,16 @@
-import { allowLocalRequest, handleApi } from '../../../lib/http.mjs';
+import { handleApi } from '../../../lib/http.mjs';
+import { allowAppRequest } from '../../../lib/origin.mjs';
 
 export const dynamic = 'force-dynamic';
 
 async function handle(request, { params }) {
+  const { path: segments } = await params;
   const backend = process.env.SPEAKMATE_BACKEND_URL;
-  if (!backend) return handleApi(request, params.path);
-  if (!allowLocalRequest(request)) {
-    return Response.json({ error: 'Use the app’s localhost address for this request.' }, { status: 403 });
+  if (!backend) return handleApi(request, segments);
+  if (!allowAppRequest(request)) {
+    return Response.json({ error: 'Open SpeakMate at its configured address.' }, { status: 403 });
   }
-  const path = params.path.map(encodeURIComponent).join('/');
+  const path = segments.map(encodeURIComponent).join('/');
   const headers = new Headers();
   for (const key of ['accept', 'content-type', 'cookie']) {
     const value = request.headers.get(key);

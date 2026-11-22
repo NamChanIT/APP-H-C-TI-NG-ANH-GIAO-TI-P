@@ -9,7 +9,7 @@ async function account(action, body) {
   });
   const result = await response.json();
   if (!response.ok) throw new Error(result.error || 'Account service is unavailable.');
-  return result.user;
+  return result;
 }
 
 export default function Account({ renderStudio }) {
@@ -17,12 +17,17 @@ export default function Account({ renderStudio }) {
   const [mode, setMode] = useState('login');
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
+  const [inviteRequired, setInviteRequired] = useState(false);
+  const [cloudSpeech, setCloudSpeech] = useState(false);
 
   async function restore() {
     setUser(undefined);
     setNotice('');
     try {
-      setUser(await account('me'));
+      const me = await account('me');
+      setInviteRequired(me.inviteRequired);
+      setCloudSpeech(me.cloudSpeech);
+      setUser(me.user);
     } catch (error) {
       setNotice(error.message);
     }
@@ -43,7 +48,8 @@ export default function Account({ renderStudio }) {
     setNotice('');
     setBusy(true);
     try {
-      setUser(await account(mode, { email, password }));
+      const result = await account(mode, { email, password, ...(mode === 'register' && { invite: data.get('invite') }) });
+      setUser(result.user);
     } catch (error) {
       setNotice(error.message);
     } finally {
@@ -64,7 +70,7 @@ export default function Account({ renderStudio }) {
     }
   }
 
-  if (user) return renderStudio(user, logout, busy);
+  if (user) return renderStudio(user, logout, busy, cloudSpeech);
   const registering = mode === 'register';
   return <main className="account-page">
     <section className="account-card panel">
@@ -79,6 +85,7 @@ export default function Account({ renderStudio }) {
             required minLength={8} maxLength={128} /></label>
           {registering && <label>Confirm password<input type="password" name="confirmation" autoComplete="new-password" required
             minLength={8} maxLength={128} /></label>}
+          {registering && inviteRequired && <label>Invite code<input name="invite" required maxLength={256} autoComplete="off" /></label>}
           <button type="submit" className="primary" disabled={busy}>{busy ? 'Please wait…' : registering ? 'Create account' : 'Sign in'}</button>
         </form>
         <div className="account-switch"><span>{registering ? 'Already have an account?' : 'New to SpeakMate?'}</span>

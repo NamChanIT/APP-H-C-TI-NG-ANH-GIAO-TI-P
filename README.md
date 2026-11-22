@@ -30,6 +30,20 @@ Mở [http://127.0.0.1:3000](http://127.0.0.1:3000) bằng Chrome. Nếu máy đ
 
 Nếu Ollama gián đoạn, bật lại dịch vụ hoặc cài đúng model rồi chọn **Retry turn**. Transcript đã lưu vẫn đọc được nếu báo cáo gặp lỗi. Báo cáo có thể thử lại từ màn hình kết thúc hoặc History.
 
+## Deploy lên Render
+
+[Mở Blueprint trên Render](https://render.com/deploy?repo=https%3A%2F%2Fgithub.com%2FNamChanIT%2FAPP-H-C-TI-NG-ANH-GIAO-TI-P)
+
+1. Trong Render Dashboard, chọn **New → Blueprint**, kết nối repo GitHub này và chọn nhánh **main**. Render sẽ đọc file `render.yaml`.
+2. Nhập `GROQ_API_KEY` cùng `SPEAKMATE_SIGNUP_CODE` trong Dashboard. Tạo key tại [Groq Console](https://console.groq.com/keys) và chọn một mã mời riêng cho nhóm thử. Giữ cả hai giá trị trong Render.
+3. Xem mức giá Render hiển thị, chọn **Deploy Blueprint** và mở URL HTTPS Render cấp. Kiểm tra `/api/health`, đăng ký bằng mã mời rồi thử một lượt nói.
+
+Blueprint tạo một Node web service ở Singapore với gói 0,5 CPU / RAM 512 MB và ổ đĩa 1 GB. SQLite được lưu ở `/var/data/speakmate.sqlite`, nên tài khoản và phiên mới còn sau khi redeploy. Dữ liệu local có sẵn trên MacBook nằm trong một database riêng. Giữ một instance cho SQLite và các phiên đang sinh phản hồi.
+
+Khi có `GROQ_API_KEY`, Render dùng Groq cho hội thoại, báo cáo và nhận diện giọng nói. Groq nhận âm thanh của lượt nói và văn bản hội thoại để xử lý, còn camera chỉ chạy trong trình duyệt. Có thể cấu hình `GROQ_CHAT_MODEL` và `GROQ_SPEECH_MODEL` trong Dashboard. Bản local mặc định dùng Ollama và Whisper trên máy.
+
+Render đặt `RENDER_EXTERNAL_URL` tự động. Nếu dùng domain riêng, đặt `SPEAKMATE_PUBLIC_ORIGIN` thành origin HTTPS của domain đó để cookie và kiểm tra origin áp dụng cho đúng địa chỉ.
+
 ## Đăng ký và đăng nhập
 
 Mở Studio, chọn **Create account** và nhập email cùng mật khẩu từ 8 ký tự. Email dùng làm định danh local. Sau khi đăng ký, trình duyệt tự đăng nhập. Dùng **Sign out** để thoát tài khoản.
@@ -113,7 +127,7 @@ performance.getEntriesByType('measure')
 
 Trong một lượt Chrome thử với Ollama 7B thật, giọng bắt đầu ở 274 ms so với 819 ms để hoàn thành lượt chào và 1.041 ms so với 1.971 ms ở lượt sau. Đây là thời gian từ yêu cầu tới phát giọng, chưa gồm nhận diện microphone. Trong ba mẫu Ollama đã nạp model, trung vị tới câu đầu là 448 ms với Qwen 2.5 3B và 1.106 ms với Qwen 2.5 Coder 7B. Model 7B dùng được nhiều chi tiết hội thoại hơn trong các mẫu này. Lần nạp nguội mất khoảng 4 giây trên máy thử.
 
-Ứng dụng hiện chỉ phục vụ localhost. Trước khi phát hành công khai, cần cấu hình HTTPS và cookie Secure, phương án xác minh và khôi phục tài khoản, kiểm thử microphone thật, giới hạn tải và lưu trữ phù hợp với hạ tầng đích.
+Bản Render dùng HTTPS, cookie Secure và mã mời cho nhóm thử. Trước khi mở đăng ký rộng rãi, cần phương án xác minh và khôi phục tài khoản, cùng kiểm thử microphone và tải trên hạ tầng đích.
 
 ## Kiểm thử và nghiệm thu
 

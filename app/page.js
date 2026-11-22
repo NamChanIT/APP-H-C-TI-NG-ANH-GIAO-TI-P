@@ -74,11 +74,11 @@ function Report({ data, character, retry, busy, back, onSpeak, saveCard, isSaved
 }
 
 export default function Page() {
-  return <Account renderStudio={(user, logout, signingOut) =>
-    <Studio key={user.id} user={user} logout={logout} signingOut={signingOut} />} />;
+  return <Account renderStudio={(user, logout, signingOut, cloudSpeech) =>
+    <Studio key={user.id} user={user} logout={logout} signingOut={signingOut} cloudSpeech={cloudSpeech} />} />;
 }
 
-function Studio({ user, logout, signingOut }) {
+function Studio({ user, logout, signingOut, cloudSpeech }) {
   const [selected, setSelected] = useState('emma');
   const [topic, setTopic] = useState('free');
   const [mode, setMode] = useState('free');
@@ -486,7 +486,9 @@ function Studio({ user, logout, signingOut }) {
           {media.mic && !media.speaking && phase === 'live' && <div className="mic-input">
             <span>Mic input</span><meter aria-label="Microphone input level" min="0" max="1" value={media.level} />
           </div>}
-          <p className="privacy"><Icon name="lock" size={14} /> Camera and speech recognition run on this device. Audio is discarded after transcription.</p>
+          <p className="privacy"><Icon name="lock" size={14} /> {cloudSpeech
+            ? 'Camera video stays in your browser. Audio and conversation text are sent to Groq.'
+            : 'Camera and speech recognition run on this device. Audio is discarded after transcription.'}</p>
         </section>
         <aside className="panel setup">
           <div className="tabs" aria-label="Session panel">
