@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import Image from 'next/image';
+import { createPortraitWarp } from './portrait-warp';
 
 // Landmarks follow the lip seam in the supplied 2048 × 2048 portrait.
 const portraitSize = 2048;
@@ -104,6 +105,7 @@ function speechShape(speech, now) {
 export default function TalkingPortrait({ state, speechMotion }) {
   const canvas = useRef(null);
   const photo = useRef(null);
+  const head = useRef(null);
   const pose = useRef(null);
   const currentState = useRef(state);
   currentState.current = state;
@@ -112,8 +114,13 @@ export default function TalkingPortrait({ state, speechMotion }) {
     const overlay = canvas.current;
     const layer = pose.current;
     const context = overlay?.getContext('2d');
-    if (!context || !layer) return;
+    const headCanvas = head.current;
+    if (!context || !layer || !headCanvas) return;
     const preference = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let warp = null;
+    let attemptedWarp = false;
+    let featuresChanged = true;
+    let currentYaw = 0;
     let frame;
     let previousTime = 0;
     let opening = 0;
@@ -145,12 +152,18 @@ export default function TalkingPortrait({ state, speechMotion }) {
       shaping += (Number(shape.rounded) - shaping) * blend;
       if (opening >= 0.025 || paintedMouth) {
         renderMouth(context, image, opening, shaping);
+        featuresChanged = true;
         paintedMouth = opening >= 0.025;
       }
 
       if (preference.matches) {
         layer.style.transform = '';
-        if (paintedEyes) context.clearRect(...eyesPatch);
+        headCanvas.hidden = true;
+        overlay.style.visibility = '';
+        if (paintedEyes) {
+          context.clearRect(...eyesPatch);
+          featuresChanged = true;
+        }
         paintedEyes = false;
         blinkSince = null;
         nextBlink = now + 1700;
@@ -164,6 +177,7 @@ export default function TalkingPortrait({ state, speechMotion }) {
         const closure = blinkAge <= 84 ? Math.sin(blinkAge / 84 * Math.PI / 2)
           : Math.cos(Math.min(1, (blinkAge - 84) / 109) * Math.PI / 2);
         renderBlink(context, image, closure);
+        featuresChanged = true;
         paintedEyes = closure >= 0.025;
         if (blinkAge >= 193) {
           blinkSince = null;
@@ -177,19 +191,39 @@ export default function TalkingPortrait({ state, speechMotion }) {
       const thinking = stage === 'thinking';
       const activity = speaking ? 1 : attentive ? 0.82 : 0.3;
       const settle = Math.min(1, (now - stateSince) / 720);
-      const nod = stage === 'hearing' ? Math.sin(Math.PI * settle) * 3.2 : 0;
-      const pitch = (thinking ? -0.42 : attentive ? 0.34 : 0) + Math.sin(seconds * 1.12) * activity * 0.29;
-      const shift = nod + (attentive ? 1.8 : thinking ? -1.9 : 0) + Math.cos(seconds * 1.28) * activity * 1.25;
+      const nod = stage === 'hearing' ? Math.sin(Math.PI * settle) * 8 : 0;
+      const pitch = (thinking ? -1.65 : attentive ? 1.05 : 0) + Math.sin(seconds * 1.15) * activity * 0.9;
+      const shift = nod + (attentive ? 2.4 : thinking ? -3.0 : 0) + Math.cos(seconds * 1.28) * activity * 2.1;
+      const yaw = (thinking ? -0.52 : attentive ? 0.43 : 0) + Math.sin(seconds * 0.83) * activity * 0.24;
       currentTilt += (pitch - currentTilt) * 0.15;
       currentShift += (shift - currentShift) * 0.15;
+      currentYaw += (yaw - currentYaw) * 0.13;
       const horizontal = Math.sin(seconds * 0.91) * (0.8 + activity * 1.5);
-      const zoom = 1.023 + Math.sin(seconds * 1.23) * 0.003 + (attentive ? 0.003 : 0);
-      layer.style.transform = `translate3d(${horizontal}px, ${currentShift}px, 0) rotate(${currentTilt}deg) scale(${zoom})`;
+
+      if (!attemptedWarp) {
+        attemptedWarp = true;
+        warp = createPortraitWarp(headCanvas);
+      }
+      if (warp?.draw(image, overlay, featuresChanged, horizontal / 500, currentShift / 470,
+        currentTilt * Math.PI / 180, currentYaw)) {
+        featuresChanged = false;
+        headCanvas.hidden = false;
+        overlay.style.visibility = 'hidden';
+        layer.style.transform = '';
+      } else {
+        headCanvas.hidden = true;
+        overlay.style.visibility = '';
+        const zoom = 1.025 + Math.sin(seconds * 1.23) * 0.003;
+        layer.style.transform = `translate3d(${horizontal}px, ${currentShift * 0.55}px, 0) rotate(${currentTilt * 0.48}deg) scale(${zoom})`;
+      }
     }
 
     frame = requestAnimationFrame(animate);
     return () => {
       cancelAnimationFrame(frame);
+      warp?.dispose();
+      headCanvas.hidden = true;
+      overlay.style.visibility = '';
       context.clearRect(...mouthPatch);
       context.clearRect(...eyesPatch);
       layer.style.transform = '';
@@ -200,6 +234,7 @@ export default function TalkingPortrait({ state, speechMotion }) {
     <div className="portrait-pose" ref={pose}>
       <Image ref={photo} src="/companion-portrait.jpg" alt="" fill priority unoptimized />
       <canvas ref={canvas} className="portrait-motion" width={portraitSize * scale} height={portraitSize * scale} />
+      <canvas ref={head} hidden className="portrait-head-motion" width={768} height={768} />
     </div>
   </div>;
 }
