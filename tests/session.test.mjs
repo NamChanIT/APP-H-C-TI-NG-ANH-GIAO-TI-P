@@ -75,3 +75,27 @@ test('streaming interruption frees the turn and saves only generated text', asyn
     db.close();
   }
 });
+
+test('free talk permits natural reactions and tangents while guided practice keeps its objective', async () => {
+  const db = createStore(':memory:');
+  try {
+    const prompts = [];
+    const dispatch = createService(db, async messages => {
+      prompts.push(messages);
+      return 'Coffee before a team meeting feels like a reasonable survival strategy.';
+    });
+    for (const mode of ['free', 'debate']) {
+      const { body } = await dispatch('POST', ['sessions'], { character: 'emma', topic: 'team-meetings', mode });
+      const result = await dispatch('POST', ['sessions', body.session.id, 'turn'], { turn: 'opening', source: 'opening' });
+      assert.equal(result.status, 200);
+    }
+    assert.match(prompts[0][0].content, /optional icebreaker/);
+    assert.match(prompts[0][0].content, /take a short tangent/);
+    assert.match(prompts[0][0].content, /A warm comment can be a whole turn/);
+    assert.doesNotMatch(prompts[0][1].content, /and a question/);
+    assert.match(prompts[1][0].content, /respectful opposing view/);
+    assert.match(prompts[1][0].content, /Practice objective:/);
+  } finally {
+    db.close();
+  }
+});
