@@ -30,15 +30,15 @@ Mở [http://127.0.0.1:3000](http://127.0.0.1:3000) bằng Chrome. Nếu máy đ
 
 Nếu Ollama gián đoạn, bật lại dịch vụ hoặc cài đúng model rồi chọn **Retry turn**. Transcript đã lưu vẫn đọc được nếu báo cáo gặp lỗi. Báo cáo có thể thử lại từ màn hình kết thúc hoặc History.
 
-## Deploy lên Render
+## Deploy bản demo lên Render Free
 
 [Mở Blueprint trên Render](https://render.com/deploy?repo=https%3A%2F%2Fgithub.com%2FNamChanIT%2FAPP-H-C-TI-NG-ANH-GIAO-TI-P)
 
 1. Trong Render Dashboard, chọn **New → Blueprint**, kết nối repo GitHub này và chọn nhánh **main**. Render sẽ đọc file `render.yaml`.
-2. Nhập `GROQ_API_KEY` cùng `SPEAKMATE_SIGNUP_CODE` trong Dashboard. Tạo key tại [Groq Console](https://console.groq.com/keys) và chọn một mã mời riêng cho nhóm thử. Giữ cả hai giá trị trong Render.
-3. Xem mức giá Render hiển thị, chọn **Deploy Blueprint** và mở URL HTTPS Render cấp. Kiểm tra `/api/health`, đăng ký bằng mã mời rồi thử một lượt nói.
+2. Nhập `GROQ_API_KEY` cùng `SPEAKMATE_SIGNUP_CODE` trong Dashboard. Tạo key tại [Groq Console](https://console.groq.com/keys) và chọn một mã mời riêng cho nhóm thử. Giữ cả hai giá trị trong Render. Để dùng Groq miễn phí, giữ tài khoản Groq ở gói Free và trong hạn mức của gói. [Hạn mức Groq](https://console.groq.com/docs/rate-limits)
+3. Xác nhận Render hiển thị **Free** rồi chọn **Deploy Blueprint** và mở URL HTTPS Render cấp. Kiểm tra `/api/health`, đăng ký bằng mã mời rồi thử một lượt nói.
 
-Blueprint tạo một Node web service ở Singapore với gói 0,5 CPU / RAM 512 MB và ổ đĩa 1 GB. SQLite được lưu ở `/var/data/speakmate.sqlite`, nên tài khoản và phiên mới còn sau khi redeploy. Dữ liệu local có sẵn trên MacBook nằm trong một database riêng. Giữ một instance cho SQLite và các phiên đang sinh phản hồi.
+Blueprint tạo một Node web service **Free** ở Singapore. SQLite nằm trong vùng tạm. Tài khoản, transcript và thẻ ôn trên Render bị xóa khi dịch vụ redeploy, khởi động lại hoặc ngủ. Render Free ngủ sau 15 phút không có truy cập. Lần mở lại đầu tiên có thể mất khoảng một phút. Dữ liệu trên MacBook nằm trong database local riêng. [Giới hạn Render Free](https://render.com/docs/free)
 
 Khi có `GROQ_API_KEY`, Render dùng Groq cho hội thoại, báo cáo và nhận diện giọng nói. Groq nhận âm thanh của lượt nói và văn bản hội thoại để xử lý, còn camera chỉ chạy trong trình duyệt. Có thể cấu hình `GROQ_CHAT_MODEL` và `GROQ_SPEECH_MODEL` trong Dashboard. Bản local mặc định dùng Ollama và Whisper trên máy.
 

@@ -251,3 +251,12 @@ ul{padding-left:23px}
 @media (max-width: 725px) {
   .portrait-avatar ~ .self-view { left: 10px; }
 }
+
+.render-demo-notice {
+  padding: 0.65rem 1rem;
+  background: #33281f;
+  color: #ffe0ba;
+  border-bottom: 1px solid #6a5645;
+  text-align: center;
+  font-size: 0.85rem;
+}
