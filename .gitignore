@@ -1,0 +1,10 @@
+node_modules/
+.next/
+data/
+.env*
+!.env.example
+
+.next-dev/
+
+# Original upload. The app uses the copy in public/.
+/658144432_2200873064060968_5394760226845499227_n.jpg
