@@ -7,15 +7,20 @@ import Image from 'next/image';
 const portraitSize = 2048;
 const scale = 0.5;
 const seam = [[1300, 950], [1350, 960], [1410, 972], [1480, 984], [1540, 983], [1600, 969], [1655, 949], [1690, 918]];
-const firstX = seam[0][0];
-const lastX = seam.at(-1)[0];
-const patch = [firstX * scale, 390, (lastX - firstX) * scale, 195];
+const mouthPatch = [650, 390, 196, 195];
+const eyesPatch = [580, 190, 335, 92];
+const eyeSeams = [
+  [[1160, 502], [1200, 484], [1250, 475], [1290, 479], [1340, 490], [1382, 502], [1406, 513]],
+  [[1590, 511], [1618, 492], [1666, 475], [1710, 468], [1760, 469], [1804, 480], [1827, 490]]
+];
 
-function lipStrips() {
+function makeStrips(points) {
+  const firstX = points[0][0];
+  const lastX = points.at(-1)[0];
   const strips = [];
-  for (let i = 1; i < seam.length; i++) {
-    const [left, top] = seam[i - 1];
-    const [right, bottom] = seam[i];
+  for (let i = 1; i < points.length; i++) {
+    const [left, top] = points[i - 1];
+    const [right, bottom] = points[i];
     for (let x = left; x < right; x += 2) {
       const y = top + (bottom - top) * ((x + 1 - left) / (right - left));
       const position = (x + 1 - firstX) / (lastX - firstX);
@@ -29,27 +34,50 @@ function lipStrips() {
   return strips;
 }
 
-const strips = lipStrips();
+const strips = makeStrips(seam);
+const eyes = eyeSeams.map(makeStrips);
+
+function renderBlink(ctx, image, closure) {
+  ctx.clearRect(...eyesPatch);
+  if (closure < 0.025) return;
+  for (const eye of eyes) {
+    for (const { x, y, taper } of eye) {
+      const top = y - 43 * taper;
+      const bottom = y + 42 * taper;
+      const topEdge = top - 34 * taper - 2;
+      const bottomEdge = bottom + 25 * taper + 2;
+      const lid = y + 25 * taper;
+      const upperClose = top + (lid - top) * closure * 0.93;
+      const lowerClose = bottom - (bottom - lid) * closure * 0.91;
+      const dx = x * scale;
+      const strip = (from, to, targetFrom, targetTo) =>
+        ctx.drawImage(image, x, from, 2, to - from, dx, targetFrom * scale, 1, (targetTo - targetFrom) * scale);
+      strip(topEdge, top, topEdge, upperClose);
+      strip(top, bottom, upperClose, lowerClose);
+      strip(bottom, bottomEdge, lowerClose, bottomEdge);
+    }
+  }
+}
 
 function renderMouth(ctx, image, opening, rounded) {
-  ctx.clearRect(...patch);
+  ctx.clearRect(...mouthPatch);
   if (opening < 0.025) return;
   for (const { x, y, taper, position } of strips) {
     const width = 2;
     const dx = x * scale;
     const upper = 80 * taper + 2;
     const lower = 112 * taper + 2;
-    const shape = taper * (rounded ? 0.72 + 0.28 * taper : 1);
-    const lift = opening * 16 * shape;
-    const drop = opening * 62 * shape;
+    const shape = taper * (1 - rounded * (1 - taper) * 0.34);
+    const lift = opening * (13 + 5 * rounded) * shape;
+    const drop = opening * (55 + 7 * rounded) * shape;
     const upperEdge = (y - lift) * scale;
     const lowerEdge = (y + drop) * scale;
     ctx.drawImage(image, x, y - upper, width, upper, dx, (y - upper) * scale, 1, (upper - lift) * scale);
     ctx.fillStyle = '#321219';
     ctx.fillRect(dx, upperEdge, 1, lowerEdge - upperEdge + 0.5);
     if (opening > 0.25 && position > 0.22 && position < 0.78) {
-      ctx.fillStyle = '#aa8f83';
-      ctx.fillRect(dx, upperEdge, 1, Math.min(5, opening * 9) * shape);
+            ctx.fillStyle = 'rgba(222, 205, 189, 0.66)';
+      ctx.fillRect(dx, upperEdge, 1, Math.min(4, opening * 8) * shape * (1 - rounded * 0.65));
     }
     ctx.fillStyle = '#59262d';
     ctx.fillRect(dx, lowerEdge - Math.min(3, drop * 0.15), 1, Math.min(3, drop * 0.15));
@@ -59,49 +87,119 @@ function renderMouth(ctx, image, opening, rounded) {
 
 function speechShape(speech, now) {
   if (!speech?.active) return { opening: 0, rounded: false };
-  const elapsed = now - speech.at;
+  const elapsed = Math.max(0, now - speech.at);
   const sequence = speech.word || '';
   const step = Math.max(58, 92 / (speech.rate || 1));
   const index = Math.floor(elapsed / step);
   const letter = sequence[index];
   const pulse = Math.sin(Math.PI * ((elapsed % step) / step));
-  if (letter && /[bmp]/i.test(letter)) return { opening: 0.06, rounded: false };
+  if (letter && /[bmp]/i.test(letter)) return { opening: 0.02 + pulse * 0.08, rounded: false };
   if (letter && /[aehiy]/i.test(letter)) return { opening: 0.42 + pulse * 0.49, rounded: false };
   if (letter && /[ouw]/i.test(letter)) return { opening: 0.31 + pulse * 0.43, rounded: true };
-  const cadence = 0.5 + 0.5 * Math.sin(elapsed / 74) * Math.cos(elapsed / 183);
-  return { opening: 0.11 + cadence * 0.49, rounded: letter ? false : cadence > 0.7 };
+  const cadence = 0.5 + 0.5 * Math.sin(elapsed / 67) * Math.cos(elapsed / 167);
+  const rest = 0.52 + 0.48 * Math.sin(elapsed / 345) ** 2;
+  return { opening: (0.04 + cadence * 0.56) * rest, rounded: !letter && cadence > 0.68 };
 }
 
-export default function TalkingPortrait({ speaking, speechMotion }) {
+export default function TalkingPortrait({ state, speechMotion }) {
   const canvas = useRef(null);
   const photo = useRef(null);
+  const pose = useRef(null);
+  const currentState = useRef(state);
+  currentState.current = state;
 
   useEffect(() => {
     const overlay = canvas.current;
+    const layer = pose.current;
     const context = overlay?.getContext('2d');
-    if (!context || !speaking) return;
+    if (!context || !layer) return;
+    const preference = window.matchMedia('(prefers-reduced-motion: reduce)');
     let frame;
     let previousTime = 0;
-    let previousOpening = 0;
+    let opening = 0;
+    let shaping = 0;
+    let paintedMouth = false;
+    let paintedEyes = false;
+    let currentTilt = 0;
+    let currentShift = 0;
+    let previousState;
+    let stateSince = 0;
+    let nextBlink = performance.now() + 1900;
+    let blinkSince = null;
+
     function animate(now) {
-      const image = photo.current;
-      if (image?.complete && image.naturalWidth && now - previousTime >= 1000 / 30) {
-        const { opening, rounded } = speechShape(speechMotion.current, now);
-        previousOpening += (opening - previousOpening) * (opening === 0 ? 0.8 : 0.64);
-        renderMouth(context, image, previousOpening, rounded);
-        previousTime = now;
-      }
       frame = requestAnimationFrame(animate);
+      const image = photo.current;
+      if (!image?.complete || !image.naturalWidth || now - previousTime < 30) return;
+      const step = Math.min(80, now - previousTime);
+      previousTime = now;
+      const stage = currentState.current;
+      if (stage !== previousState) {
+        previousState = stage;
+        stateSince = now;
+      }
+
+      const shape = speechShape(speechMotion?.current, now);
+      const blend = 1 - Math.exp(-step / (shape.opening < opening ? 36 : 48));
+      opening += (shape.opening - opening) * blend;
+      shaping += (Number(shape.rounded) - shaping) * blend;
+      if (opening >= 0.025 || paintedMouth) {
+        renderMouth(context, image, opening, shaping);
+        paintedMouth = opening >= 0.025;
+      }
+
+      if (preference.matches) {
+        layer.style.transform = '';
+        if (paintedEyes) context.clearRect(...eyesPatch);
+        paintedEyes = false;
+        blinkSince = null;
+        nextBlink = now + 1700;
+        return;
+      }
+
+      // Keep the blink brief, with a slightly quicker close than reopen.
+      if (document.visibilityState === 'visible' && now >= nextBlink && blinkSince === null) blinkSince = now;
+      if (blinkSince !== null) {
+        const blinkAge = now - blinkSince;
+        const closure = blinkAge <= 84 ? Math.sin(blinkAge / 84 * Math.PI / 2)
+          : Math.cos(Math.min(1, (blinkAge - 84) / 109) * Math.PI / 2);
+        renderBlink(context, image, closure);
+        paintedEyes = closure >= 0.025;
+        if (blinkAge >= 193) {
+          blinkSince = null;
+          nextBlink = now + 2500 + Math.random() * 3100;
+        }
+      }
+
+      const seconds = now / 1000;
+      const attentive = stage === 'listening' || stage === 'hearing';
+      const speaking = stage === 'speaking';
+      const thinking = stage === 'thinking';
+      const activity = speaking ? 1 : attentive ? 0.82 : 0.3;
+      const settle = Math.min(1, (now - stateSince) / 720);
+      const nod = stage === 'hearing' ? Math.sin(Math.PI * settle) * 3.2 : 0;
+      const pitch = (thinking ? -0.42 : attentive ? 0.34 : 0) + Math.sin(seconds * 1.12) * activity * 0.29;
+      const shift = nod + (attentive ? 1.8 : thinking ? -1.9 : 0) + Math.cos(seconds * 1.28) * activity * 1.25;
+      currentTilt += (pitch - currentTilt) * 0.15;
+      currentShift += (shift - currentShift) * 0.15;
+      const horizontal = Math.sin(seconds * 0.91) * (0.8 + activity * 1.5);
+      const zoom = 1.023 + Math.sin(seconds * 1.23) * 0.003 + (attentive ? 0.003 : 0);
+      layer.style.transform = `translate3d(${horizontal}px, ${currentShift}px, 0) rotate(${currentTilt}deg) scale(${zoom})`;
     }
+
     frame = requestAnimationFrame(animate);
     return () => {
       cancelAnimationFrame(frame);
-      context.clearRect(...patch);
+      context.clearRect(...mouthPatch);
+      context.clearRect(...eyesPatch);
+      layer.style.transform = '';
     };
-  }, [speaking, speechMotion]);
+  }, [speechMotion]);
 
   return <div className="avatar portrait-avatar" aria-hidden="true">
-    <Image ref={photo} src="/companion-portrait.jpg" alt="" fill priority unoptimized />
-    <canvas ref={canvas} className="portrait-motion" width={portraitSize * scale} height={portraitSize * scale} />
+    <div className="portrait-pose" ref={pose}>
+      <Image ref={photo} src="/companion-portrait.jpg" alt="" fill priority unoptimized />
+      <canvas ref={canvas} className="portrait-motion" width={portraitSize * scale} height={portraitSize * scale} />
+    </div>
   </div>;
 }

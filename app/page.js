@@ -470,8 +470,9 @@ function Studio({ user, logout, signingOut, cloudSpeech }) {
       {view === 'studio' && <div className="workspace">
         <section className="call" aria-label="Conversation">
           <div className="stage">
-            <Avatar character={character} speaking={media.speaking} speechMotion={media.speechMotion} />
-            <div className="stage-top"><span className="status"><i />{status}</span><span className="time"><Icon name="clock" size={14} /> {challengeClock ?? CLOCK(seconds)}</span></div>
+            <Avatar character={character} state={media.hearing ? 'hearing' : status.toLowerCase()} speechMotion={media.speechMotion} />
+            <div className="stage-top"><span className={`status ${media.speaking ? 'status-speaking' : ''}`}>
+              <span aria-hidden="true" className="status-signal"><i /><i /><i /></span>{status}</span><span className="time"><Icon name="clock" size={14} /> {challengeClock ?? CLOCK(seconds)}</span></div>
             <div className={`self-view ${media.camera ? 'camera-on' : ''}`}>
               <video ref={media.video} autoPlay muted playsInline aria-label="Your local camera preview" />
               {!media.camera && <><Icon name="camera" size={21} /><span>Camera off</span></>}

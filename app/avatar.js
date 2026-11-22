@@ -1,7 +1,7 @@
 import TalkingPortrait from './talking-portrait';
 
-export default function Avatar({ character, miniature = false, speaking, speechMotion }) {
-  if (!miniature) return <TalkingPortrait speaking={speaking} speechMotion={speechMotion} />;
+export default function Avatar({ character, miniature = false, state, speechMotion }) {
+  if (!miniature) return <TalkingPortrait state={state} speechMotion={speechMotion} />;
   return <div aria-hidden="true" className={`avatar ${character.id} ${miniature ? 'miniature' : ''}`}
     style={{ '--skin': character.skin, '--hair': character.hair, '--shirt': character.shirt, '--scene': character.background }}>
     <div className="avatar-art">

@@ -283,3 +283,29 @@ ul{padding-left:23px}
 .repeat-result { padding-block-start: 0.5rem; border-top: 1px solid var(--line); }
 .mic-hint { margin-bottom: 0.5rem; font-size: 0.85rem; }
 .export-link { color: var(--accent); font-size: 0.85rem; }
+
+.portrait-pose {
+  position: absolute;
+  inset: 0;
+  transform-origin: 62% 43%;
+  will-change: transform;
+}
+.status-signal { display: inline-flex; align-items: center; justify-content: center; gap: 2px; width: 12px; height: 13px; }
+.status-signal i { flex: none; }
+.status-signal i:not(:first-child) { display: none; }
+.status-speaking .status-signal i {
+  display: block;
+  width: 2px;
+  height: 12px;
+  transform: scaleY(0.45);
+  animation: speaking-wave 0.7s ease-in-out infinite alternate;
+}
+.status-speaking .status-signal i:nth-child(2) { animation-delay: -0.36s; }
+.status-speaking .status-signal i:nth-child(3) { animation-delay: -0.18s; }
+@keyframes speaking-wave {
+  from { transform: scaleY(0.35); }
+  to { transform: scaleY(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .portrait-pose { will-change: auto; }
+}
